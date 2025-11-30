@@ -1,0 +1,639 @@
+<html lang="zh-CN"><head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>智能座位安排系统</title>
+  <!-- Tailwind CSS v3 -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <!-- Font Awesome -->
+  <link href="https://cdn.jsdelivr.net/npm/font-awesome@4.7.0/css/font-awesome.min.css" rel="stylesheet">
+  
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            primary: '#3b82f6',
+            secondary: '#60a5fa',
+            accent1: '#ef4444',
+            accent2: '#f97316',
+            accent3: '#eab308',
+            accent4: '#22c55e',
+            accent5: '#14b8a6',
+            accent6: '#8b5cf6',
+            accent7: '#ec4899',
+          },
+          fontFamily: {
+            sans: ['Inter', 'system-ui', 'sans-serif'],
+          },
+          animation: {
+            'flip': 'flip 0.6s ease-in-out',
+          },
+          keyframes: {
+            flip: {
+              '0%': { transform: 'rotateY(0deg)' },
+              '100%': { transform: 'rotateY(180deg)' },
+            }
+          }
+        }
+      }
+    }
+  </script>
+  
+  <style type="text/tailwindcss">
+    @layer utilities {
+      .preserve-3d {
+        transform-style: preserve-3d;
+      }
+      .perspective {
+        perspective: 1000px;
+      }
+      .backface-hidden {
+        backface-visibility: hidden;
+      }
+      .rotate-y-180 {
+        transform: rotateY(180deg);
+      }
+      .seat-flipped {
+        animation: flip 0.6s ease-in-out forwards;
+      }
+      .seat-card {
+        transition: transform 0.6s;
+        transform-style: preserve-3d;
+      }
+      .seat-card.flipped {
+        transform: rotateY(180deg);
+      }
+      .seat-front, .seat-back {
+        backface-visibility: hidden;
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+      }
+      .seat-back {
+        transform: rotateY(180deg);
+      }
+      .seat-group {
+        transition: all 0.3s ease;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .seat-column {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+      }
+      .seat-group:hover {
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        transform: translateY(-2px);
+      }
+      .floor-pattern {
+        background-image: linear-gradient(rgba(156, 163, 175, 0.1) 1px, transparent 1px),
+                          linear-gradient(90deg, rgba(156, 163, 175, 0.1) 1px, transparent 1px);
+        background-size: 20px 20px;
+      }
+      .teacher-desk {
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+      }
+    }
+  </style>
+</head>
+<body class="bg-gray-50 min-h-screen font-sans">
+  <div class="container mx-auto px-4 py-8">
+    <!-- 页面标题 -->
+    <header class="text-center mb-8">
+      <h1 class="text-3xl md:text-4xl font-bold text-gray-800 mb-2">智能座位安排系统</h1>
+      <p class="text-gray-600">交互式座位选择与分配工具</p>
+    </header>
+    
+    <!-- 控制面板 -->
+    <div class="bg-white rounded-lg shadow-md p-6 mb-8">
+      <div class="flex flex-col md:flex-row items-center justify-between gap-4">
+        <div class="flex items-center gap-3">
+          <label for="selectionRule" class="text-gray-700 font-medium">选择规则:</label>
+          <select id="selectionRule" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-primary focus:border-primary block p-2.5">
+            <option value="1">规则 1: 同时选择 1 个座位</option>
+            <option value="2">规则 2: 同时选择 2 个不同颜色的座位</option>
+            <option value="3">规则 3: 同时选择 3 个不同颜色的座位</option>
+            <option value="4">规则 4: 同时选择 4 个不同颜色的座位</option>
+            <option value="5">规则 5: 同时选择 5 个不同颜色的座位</option>
+            <option value="6">规则 6: 同时选择 6 个不同颜色的座位</option>
+            <option value="7">规则 7: 同时选择 7 个不同颜色的座位</option>
+          </select>
+        </div>
+        
+        <div class="flex items-center gap-3">
+          <button id="resetAll" class="bg-primary hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2">
+            <i class="fa fa-refresh"></i> 重置所有座位
+          </button>
+          <button id="undoLast" class="bg-gray-600 hover:bg-gray-700 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2" disabled>
+            <i class="fa fa-undo"></i> 还原上一步
+          </button>
+          <button id="randomSelect" class="bg-secondary hover:bg-blue-500 text-white font-medium py-2 px-4 rounded-lg transition-colors flex items-center gap-2">
+            <i class="fa fa-random"></i> 随机选择
+          </button>
+        </div>
+      </div>
+      
+      <div class="mt-4 text-sm text-gray-600">
+        <p><i class="fa fa-info-circle mr-1"></i> 当前已选择: <span id="selectedCount" class="font-semibold text-primary">0</span> 个座位</p>
+      </div>
+    </div>
+    
+    <!-- 座位布局说明 -->
+
+    
+    <!-- 教室区域 -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8 overflow-hidden relative">
+      <!-- 教室装饰元素 -->
+      <div class="absolute top-0 left-0 w-full h-16 bg-gradient-to-r from-gray-700 to-gray-800 z-0"></div>
+      
+      <!-- 左侧窗户 -->
+      <div class="absolute top-24 left-0 w-16 h-32 bg-blue-100 border-r-4 border-blue-300 z-0">
+        <div class="h-full flex flex-col justify-around p-1">
+          <div class="h-1/3 border-b-2 border-t-2 border-blue-300"></div>
+          <div class="h-1/3 border-b-2 border-blue-300"></div>
+          <div class="h-1/3"></div>
+        </div>
+      </div>
+      
+      <!-- 右侧门 -->
+      <div class="absolute top-24 right-0 w-16 h-32 bg-yellow-800 z-0">
+        <div class="absolute top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 w-3 h-8 bg-yellow-600 rounded"></div>
+      </div>
+      
+      <div class="relative z-10">
+        <h3 class="text-xl font-semibold text-center text-gray-800 mb-6" style="color: rgb(255, 252, 252);">教室布局</h3>
+        
+        <!-- 讲台区域 -->
+        <div class="flex justify-center mb-10">
+          <div class="teacher-desk bg-yellow-800 text-white p-6 rounded-lg shadow-lg max-w-lg w-full flex items-center justify-between">
+            <div class="flex items-center">
+              <i class="fa fa-chalkboard-teacher text-2xl mr-3"></i>
+              <div>
+                <h4 class="font-bold">讲台</h4>
+                <p class="text-sm opacity-80">教师位置</p>
+              </div>
+            </div>
+            <div class="hidden md:block">
+              <i class="fa fa-user-tie text-3xl opacity-50"></i>
+            </div>
+          </div>
+        </div>
+        
+
+        
+        <!-- 座位区域 -->
+        <div class="overflow-x-auto bg-blue-50 p-4 rounded-lg border border-blue-100 floor-pattern">
+          <div class="flex justify-center min-w-max">
+            <!-- 座位网格容器 -->
+            <div id="seatingGrid" class="grid grid-cols-4 gap-6 md:gap-8">
+            <!-- 第一组：第一列 -->
+            <div class="seat-group flex flex-col items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
+              <div class="grid grid-cols-1 gap-1 md:gap-2">
+                <!-- 第一列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第七列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+              </div>
+            </div>
+            
+            <!-- 第二组：第二列和第三列 -->
+            <div class="seat-group flex flex-col items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
+
+              <div class="grid grid-cols-2 gap-1 md:gap-2">
+                <!-- 第二列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第六列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+                <!-- 第三列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第五列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+              </div>
+            </div>
+            
+            <!-- 第三组：第四列和第五列 -->
+            <div class="seat-group flex flex-col items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
+
+              <div class="grid grid-cols-2 gap-1 md:gap-2">
+                <!-- 第四列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第四列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+                <!-- 第五列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第三列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+              </div>
+            </div>
+            
+            <!-- 第四组：第六列和第七列 -->
+            <div class="seat-group flex flex-col items-center p-3 border border-gray-200 rounded-lg bg-gray-50">
+
+              <div class="grid grid-cols-2 gap-1 md:gap-2">
+                <!-- 第六列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第二列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+                <!-- 第七列 -->
+                <div class="seat-column flex flex-col gap-2 md:gap-4">
+                  <div class="text-center text-sm text-gray-600 mb-1">第一列</div>
+                  <!-- 座位将通过JavaScript动态生成 -->
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    
+    <!-- 已选座位信息 -->
+    <div class="bg-white rounded-lg shadow-md p-6">
+      <h3 class="text-lg font-semibold text-gray-800 mb-4">已选座位信息</h3>
+      <div id="selectedSeatsList" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+        <p class="text-gray-500 col-span-full text-center">尚未选择任何座位</p>
+      </div>
+    </div>
+    
+    <!-- 页脚 -->
+    <footer class="text-center mt-8 text-gray-500 text-sm">
+      <p>© 2025 智能座位安排系统 | 设计与开发</p>
+    </footer>
+  </div>
+
+  <script>
+    // 座位配置
+    const seatConfig = [6, 7, 7, 7, 7, 6, 6];
+    
+    // 颜色配置 - 对应7种不同颜色
+    const colorConfig = [
+      'bg-accent1', // 红色
+      'bg-accent2', // 橙色
+      'bg-accent3', // 黄色
+      'bg-accent4', // 绿色
+      'bg-accent5', // 青色
+      'bg-accent6', // 紫色
+      'bg-accent7'  // 粉色
+    ];
+    
+    // 存储已选中的座位
+    let selectedSeats = [];
+    
+    // 存储选择历史记录（用于多点一次还原一次功能）
+    let selectionHistory = [];
+    
+    // 当前选择规则
+    let currentRule = 1;
+    
+    // 全局选择计数器 - 记录总选择次数（用于颜色循环）
+    let globalSelectionCounter = 0;
+    
+    // 存储座位的选择顺序和颜色信息
+    let seatSelectionLog = [];
+    
+    // 初始化函数
+    function initializeSeating() {
+      // 获取所有座位列容器
+      const columnContainers = [
+        document.querySelector('#seatingGrid > div:nth-child(1) > div > div'), // 第一列
+        document.querySelector('#seatingGrid > div:nth-child(2) > div > div:nth-child(1)'), // 第二列
+        document.querySelector('#seatingGrid > div:nth-child(2) > div > div:nth-child(2)'), // 第三列
+        document.querySelector('#seatingGrid > div:nth-child(3) > div > div:nth-child(1)'), // 第四列
+        document.querySelector('#seatingGrid > div:nth-child(3) > div > div:nth-child(2)'), // 第五列
+        document.querySelector('#seatingGrid > div:nth-child(4) > div > div:nth-child(1)'), // 第六列
+        document.querySelector('#seatingGrid > div:nth-child(4) > div > div:nth-child(2)')  // 第七列
+      ];
+      
+      seatConfig.forEach((seatCount, columnIndex) => {
+        const column = columnContainers[columnIndex];
+        
+        // 为每列创建座位
+        for (let i = 0; i < seatCount; i++) {
+          const seatNumber = i + 1;
+          const seatId = `seat-${columnIndex + 1}-${seatNumber}`;
+          
+          // 创建座位卡片容器
+          const seatCard = document.createElement('div');
+          seatCard.className = 'seat-card perspective h-16 md:h-20 w-full sm:w-12 md:w-16 lg:w-18 cursor-pointer relative mx-auto';
+          seatCard.dataset.column = columnIndex + 1;
+          seatCard.dataset.number = seatNumber;
+          seatCard.dataset.id = seatId;
+          
+          // 创建座位正面
+          const seatFront = document.createElement('div');
+          seatFront.className = 'seat-front bg-primary rounded-lg flex items-center justify-center text-white font-medium shadow-sm';
+          seatFront.innerHTML = `<span>${seatNumber}</span>`;
+          
+          // 创建座位背面
+          const seatBack = document.createElement('div');
+          seatBack.className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+          seatBack.innerHTML = `<span>${getColumnLetter(columnIndex + 1)}${seatNumber}</span>`;
+          
+          // 组装座位卡片
+          seatCard.appendChild(seatFront);
+          seatCard.appendChild(seatBack);
+          
+          // 添加点击事件
+          seatCard.addEventListener('click', handleSeatClick);
+          
+          // 添加到列中
+          column.appendChild(seatCard);
+        }
+      });
+      
+      // 初始化事件监听
+      document.getElementById('selectionRule').addEventListener('change', handleRuleChange);
+      document.getElementById('resetAll').addEventListener('click', resetAllSeats);
+      document.getElementById('undoLast').addEventListener('click', undoLastSelection);
+      document.getElementById('randomSelect').addEventListener('click', handleRandomSelect);
+    }
+    
+    // 处理座位点击事件
+    function handleSeatClick(event) {
+      const seatCard = event.currentTarget;
+      const seatId = seatCard.dataset.id;
+      const column = parseInt(seatCard.dataset.column);
+      const number = parseInt(seatCard.dataset.number);
+      
+      // 检查是否已经选中
+      const isSelected = selectedSeats.some(seat => seat.id === seatId);
+      
+      if (isSelected) {
+        // 取消选择
+        selectedSeats = selectedSeats.filter(seat => seat.id !== seatId);
+        seatCard.classList.remove('flipped');
+        seatCard.querySelector('.seat-back').className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+        
+        // 更新UI
+        updateUI();
+      } else {
+        // 检查是否符合选择规则
+        if (selectedSeats.length >= currentRule) {
+          // 如果超过规则限制，将当前状态保存到历史记录
+          saveCurrentSelectionToHistory();
+          
+          // 实现"多点一次还原一次" - 记录要取消的座位
+          const seatToDeselect = selectedSeats[selectedSeats.length - currentRule];
+          const seatCardToDeselect = document.querySelector(`[data-id="${seatToDeselect.id}"]`);
+          
+          if (seatCardToDeselect) {
+            seatCardToDeselect.classList.remove('flipped');
+            seatCardToDeselect.querySelector('.seat-back').className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+          }
+          
+          // 从数组中移除要取消的座位
+          selectedSeats = selectedSeats.filter(seat => seat.id !== seatToDeselect.id);
+        }
+        
+        // 增加全局选择计数器
+        globalSelectionCounter++;
+        
+        // 记录选择日志
+        seatSelectionLog.push({
+          id: seatId,
+          selectionOrder: globalSelectionCounter
+        });
+        
+        // 选择新座位 - 颜色索引基于全局选择计数器
+        // 第n+1个座位: (n+1) % n = 1 → 第1种颜色
+        // 第n+2个座位: (n+2) % n = 2 → 第2种颜色
+        // 以此类推...
+        const colorIndex = (globalSelectionCounter - 1) % currentRule;
+        const colorClass = colorConfig[colorIndex];
+        
+        selectedSeats.push({
+          id: seatId,
+          column,
+          number,
+          colorIndex,
+          colorClass
+        });
+        
+        seatCard.classList.add('flipped');
+        seatCard.querySelector('.seat-back').className = `seat-back ${colorClass} rounded-lg flex items-center justify-center text-white font-medium shadow-inner`;
+        
+        // 更新UI
+        updateUI();
+      }
+    }
+    
+    // 保存当前选择状态到历史记录
+    function saveCurrentSelectionToHistory() {
+      // 深拷贝当前选择状态、全局计数器和选择日志
+      const currentState = {
+        seats: JSON.parse(JSON.stringify(selectedSeats)),
+        counter: globalSelectionCounter,
+        log: JSON.parse(JSON.stringify(seatSelectionLog))
+      };
+      
+      selectionHistory.push(currentState);
+      
+      // 限制历史记录长度，避免内存占用过大
+      if (selectionHistory.length > 20) {
+        selectionHistory.shift();
+      }
+      
+      // 更新还原按钮状态
+      updateUndoButtonState();
+    }
+    
+    // 还原到上一步选择状态
+    function undoLastSelection() {
+      if (selectionHistory.length > 0) {
+        // 获取上一步状态
+        const lastState = selectionHistory.pop();
+        
+        // 重置当前选择
+        resetSelectedSeats();
+        
+        // 恢复上一步状态
+        lastState.seats.forEach(seat => {
+          const seatCard = document.querySelector(`[data-id="${seat.id}"]`);
+          if (seatCard) {
+            seatCard.classList.add('flipped');
+            seatCard.querySelector('.seat-back').className = `seat-back ${seat.colorClass} rounded-lg flex items-center justify-center text-white font-medium shadow-inner`;
+          }
+        });
+        
+        // 更新选择数据
+        selectedSeats = lastState.seats;
+        
+        // 恢复全局选择计数器和选择日志
+        globalSelectionCounter = lastState.counter;
+        seatSelectionLog = lastState.log;
+        
+        // 更新UI
+        updateUI();
+        
+        // 更新还原按钮状态
+        updateUndoButtonState();
+      }
+    }
+    
+    // 更新还原按钮状态
+    function updateUndoButtonState() {
+      const undoButton = document.getElementById('undoLast');
+      if (undoButton) {
+        undoButton.disabled = selectionHistory.length === 0;
+        undoButton.classList.toggle('opacity-50', selectionHistory.length === 0);
+      }
+    }
+    
+    // 重置已选中的座位（但不更新UI，用于内部调用）
+    function resetSelectedSeats() {
+      selectedSeats.forEach(seat => {
+        const seatCard = document.querySelector(`[data-id="${seat.id}"]`);
+        if (seatCard) {
+          seatCard.classList.remove('flipped');
+          seatCard.querySelector('.seat-back').className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+        }
+      });
+      
+      selectedSeats = [];
+    }
+    
+    // 处理规则变更
+    function handleRuleChange(event) {
+      currentRule = parseInt(event.target.value);
+      
+      // 如果当前选中的座位数超过新规则限制，自动取消超出的座位
+      if (selectedSeats.length > currentRule) {
+        // 保留前面的座位，取消后面的座位
+        const seatsToRemove = selectedSeats.splice(currentRule);
+        
+        seatsToRemove.forEach(seat => {
+          const seatCard = document.querySelector(`[data-id="${seat.id}"]`);
+          if (seatCard) {
+            seatCard.classList.remove('flipped');
+            seatCard.querySelector('.seat-back').className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+          }
+        });
+      }
+      
+      // 重新分配颜色 - 基于全局选择顺序
+      reassignColors();
+      
+      // 更新UI
+      updateUI();
+    }
+    
+    // 重新分配颜色
+    function reassignColors() {
+      selectedSeats.forEach(seat => {
+        // 查找该座位的选择顺序
+        const logEntry = seatSelectionLog.find(log => log.id === seat.id);
+        const selectionOrder = logEntry ? logEntry.selectionOrder : 0;
+        
+        // 根据全局选择顺序和当前规则重新分配颜色
+        const newColorIndex = (selectionOrder - 1) % currentRule;
+        const newColorClass = colorConfig[newColorIndex];
+        
+        // 更新座位数据
+        seat.colorIndex = newColorIndex;
+        seat.colorClass = newColorClass;
+        
+        // 更新UI
+        const seatCard = document.querySelector(`[data-id="${seat.id}"]`);
+        if (seatCard) {
+          const seatBack = seatCard.querySelector('.seat-back');
+          seatBack.className = `seat-back ${newColorClass} rounded-lg flex items-center justify-center text-white font-medium shadow-inner`;
+        }
+      });
+      
+      // 更新已选座位列表
+      updateSelectedSeatsList();
+    }
+    
+    // 重置所有座位
+    function resetAllSeats() {
+      selectedSeats.forEach(seat => {
+        const seatCard = document.querySelector(`[data-id="${seat.id}"]`);
+        if (seatCard) {
+          seatCard.classList.remove('flipped');
+          seatCard.querySelector('.seat-back').className = 'seat-back rounded-lg flex items-center justify-center text-white font-medium shadow-inner';
+        }
+      });
+      
+      selectedSeats = [];
+      selectionHistory = []; // 清空历史记录
+      globalSelectionCounter = 0; // 重置全局选择计数器
+      seatSelectionLog = []; // 清空选择日志
+      updateUI();
+      updateUndoButtonState(); // 更新还原按钮状态
+    }
+    
+    // 随机选择座位
+    function handleRandomSelect() {
+      // 重置当前选择
+      resetAllSeats();
+      
+      // 获取所有座位
+      const allSeats = document.querySelectorAll('.seat-card');
+      const availableSeats = Array.from(allSeats);
+      
+      // 根据当前规则选择随机座位
+      const seatsToSelect = Math.min(currentRule, availableSeats.length);
+      
+      for (let i = 0; i < seatsToSelect; i++) {
+        // 随机选择一个座位
+        const randomIndex = Math.floor(Math.random() * availableSeats.length);
+        const selectedSeat = availableSeats.splice(randomIndex, 1)[0];
+        
+        // 触发点击事件
+        selectedSeat.click();
+      }
+    }
+    
+    // 更新UI
+    function updateUI() {
+      // 更新已选座位数量
+      document.getElementById('selectedCount').textContent = selectedSeats.length;
+      
+      // 更新已选座位列表
+      updateSelectedSeatsList();
+    }
+    
+    // 更新已选座位列表
+    function updateSelectedSeatsList() {
+      const listContainer = document.getElementById('selectedSeatsList');
+      
+      if (selectedSeats.length === 0) {
+        listContainer.innerHTML = '<p class="text-gray-500 col-span-full text-center">尚未选择任何座位</p>';
+        return;
+      }
+      
+      // 清空列表
+      listContainer.innerHTML = '';
+      
+      // 添加已选座位
+      selectedSeats.forEach(seat => {
+        const seatItem = document.createElement('div');
+        seatItem.className = `flex items-center gap-2 p-2 rounded ${seat.colorClass} text-white`;
+        seatItem.innerHTML = `
+          <span class="font-medium">${getColumnLetter(seat.column)}${seat.number}</span>
+          <span class="text-xs opacity-80">第${seat.column}列 第${seat.number}个</span>
+        `;
+        listContainer.appendChild(seatItem);
+      });
+    }
+    
+    // 将列号转换为字母 (1->A, 2->B, ..., 7->G)
+    function getColumnLetter(columnNumber) {
+      return String.fromCharCode(64 + columnNumber);
+    }
+    
+    // 页面加载完成后初始化
+    document.addEventListener('DOMContentLoaded', initializeSeating);
+  </script>
+
+
+</div></body></html>
